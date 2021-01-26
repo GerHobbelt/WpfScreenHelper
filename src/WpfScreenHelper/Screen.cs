@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Interop;
 
 namespace WpfScreenHelper
 {
@@ -50,10 +51,11 @@ namespace WpfScreenHelper
             else
             {
                 var info = new NativeMethods.MONITORINFOEX();
+                var hndl = new HandleRef(null, monitor);
 
-                NativeMethods.GetMonitorInfo(new HandleRef(null, monitor), info);
+                NativeMethods.GetMonitorInfo(hndl, info);
 
-                this.Bounds = new Rect(
+                Rect bounds = new Rect(
                     info.rcMonitor.left, info.rcMonitor.top,
                     info.rcMonitor.right - info.rcMonitor.left,
                     info.rcMonitor.bottom - info.rcMonitor.top);
@@ -61,6 +63,48 @@ namespace WpfScreenHelper
                 this.Primary = ((info.dwFlags & MONITORINFOF_PRIMARY) != 0);
 
                 this.DeviceName = new string(info.szDevice).TrimEnd((char)0);
+
+                // Returns the scaling of the given screen.
+                uint dpiX = 0, dpiY = 0;
+                int mode = NativeMethods.GetThreadDpiAwarenessContext().ToInt32();
+
+                //switch (NativeMethods.GetDpiForMonitor(hndl, NativeMethods.DpiType.MDT_RAW_DPI, out dpiX, out dpiY).ToInt32())
+                switch (NativeMethods.GetDpiForMonitor(hndl, NativeMethods.DpiType.MDT_EFFECTIVE_DPI, out dpiX, out dpiY).ToInt32())
+                {
+                    case NativeMethods._S_OK:
+                        {
+                            // WPF works with a standard 96 DPI setting, hence any other dpiX/Y should result in a relative scaling factor here:
+                            double x = 96.0 * bounds.X / dpiX;
+                            double y = 96.0 * bounds.Y / dpiY;
+                            double w = 96.0 * bounds.Width / dpiX;
+                            double h = 96.0 * bounds.Height / dpiY;
+
+                            bounds = new Rect(x, y, w, h);
+                        }
+                        break;
+
+                case NativeMethods._E_INVALIDARG:
+                    throw new ArgumentException("Unknown error. See https://msdn.microsoft.com/en-us/library/windows/desktop/dn280510.aspx for more information.");
+                default:
+                    throw new COMException("Unknown error. See https://msdn.microsoft.com/en-us/library/windows/desktop/dn280510.aspx for more information.");
+            }
+
+#if false   // the way Qiqqa did this dpi/scaling thing before...
+                System.Windows.Media.Matrix matrix;
+                using (HwndSource src = new HwndSource(new HwndSourceParameters()))
+                {
+                    matrix = src.CompositionTarget.TransformToDevice;
+                }
+
+                double x = bounds.X / matrix.M11;
+                double y = bounds.Y / matrix.M22;
+                double w = bounds.Width / matrix.M11;
+                double h = bounds.Height / matrix.M22;
+
+                bounds = new Rect(x, y, w, h);
+#endif
+
+                this.Bounds = bounds;
             }
             hmonitor = monitor;
         }
@@ -69,7 +113,7 @@ namespace WpfScreenHelper
         /// Gets an array of all displays on the system.
         /// </summary>
         /// <returns>An enumerable of type Screen, containing all displays on the system.</returns>
-        public static IEnumerable<Screen> AllScreens
+        public static List<Screen> AllScreens
         {
             get
             {
@@ -80,10 +124,10 @@ namespace WpfScreenHelper
                     NativeMethods.EnumDisplayMonitors(NativeMethods.NullHandleRef, null, proc, IntPtr.Zero);
                     if (closure.Screens.Count > 0)
                     {
-                        return closure.Screens.Cast<Screen>();
+                        return closure.Screens;
                     }
                 }
-                return new[] { new Screen((IntPtr)PRIMARY_MONITOR) };
+                return new List<Screen>() { new Screen((IntPtr)PRIMARY_MONITOR) };
             }
         }
 
@@ -200,16 +244,16 @@ namespace WpfScreenHelper
 
         private class MonitorEnumCallback
         {
-            public ArrayList Screens { get; private set; }
+            public List<Screen> Screens { get; private set; }
 
             public MonitorEnumCallback()
             {
-                this.Screens = new ArrayList();
+                Screens = new List<Screen>();
             }
 
             public bool Callback(IntPtr monitor, IntPtr hdc, IntPtr lprcMonitor, IntPtr lparam)
             {
-                this.Screens.Add(new Screen(monitor, hdc));
+                Screens.Add(new Screen(monitor, hdc));
                 return true;
             }
         }

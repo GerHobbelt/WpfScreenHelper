@@ -14,7 +14,7 @@ namespace WpfScreenHelper
         [DllImport(ExternDll.User32, ExactSpelling = true)]
         [ResourceExposure(ResourceScope.None)]
         public static extern bool EnumDisplayMonitors(HandleRef hdc, COMRECT rcClip, MonitorEnumProc lpfnEnum, IntPtr dwData);
-        
+
         [DllImport(ExternDll.User32, ExactSpelling = true)]
         [ResourceExposure(ResourceScope.None)]
         public static extern IntPtr MonitorFromWindow(HandleRef handle, int flags);
@@ -35,11 +35,50 @@ namespace WpfScreenHelper
         [ResourceExposure(ResourceScope.None)]
         public static extern bool GetCursorPos([In, Out] POINT pt);
 
+        // https://msdn.microsoft.com/en-us/library/windows/desktop/dn280510.aspx
+        [DllImport(ExternDll.ShCore, ExactSpelling = true, CharSet = CharSet.Auto)]
+        public static extern IntPtr GetDpiForMonitor([In] HandleRef hmonitor, [In] DpiType dpiType, [Out] out uint dpiX, [Out] out uint dpiY);
+
+        // https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getthreaddpiawarenesscontext
+        [DllImport(ExternDll.User32, ExactSpelling = true, CharSet = CharSet.Auto)]
+        public static extern IntPtr GetThreadDpiAwarenessContext();   // -> DpiAwarenessContext
+
         public static readonly HandleRef NullHandleRef = new HandleRef(null, IntPtr.Zero);
 
         public delegate bool MonitorEnumProc(IntPtr monitor, IntPtr hdc, IntPtr lprcMonitor, IntPtr lParam);
 
-        [StructLayout(LayoutKind.Sequential)]
+        /// <summary>
+        /// Represents the different types of scaling.
+        /// </summary>
+        /// <seealso cref="https://msdn.microsoft.com/en-us/library/windows/desktop/dn280511.aspx"/>
+        public enum DpiType
+        {
+            MDT_EFFECTIVE_DPI = 0,
+            MDT_ANGULAR_DPI = 1,
+            MDT_RAW_DPI = 2,
+            MDT_DEFAULT = MDT_EFFECTIVE_DPI
+        }
+
+        // https://docs.microsoft.com/en-us/windows/win32/api/windef/ne-windef-dpi_awareness
+        // https://docs.microsoft.com/en-us/windows/win32/api/shellscalingapi/ne-shellscalingapi-process_dpi_awareness
+        // https://docs.microsoft.com/en-us/windows/win32/hidpi/dpi-awareness-context
+        public enum DpiAwarenessContext
+        {
+            DPI_AWARENESS_CONTEXT_UNAWARE = -1,
+            DPI_AWARENESS_CONTEXT_SYSTEM_AWARE = -2,
+            DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE = -3,
+            DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4,
+            DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED = -5,
+        }
+        public enum DpiAwareness
+        {
+            DPI_AWARENESS_INVALID = -1,
+            DPI_AWARENESS_UNAWARE = 0,
+            DPI_AWARENESS_SYSTEM_AWARE = 1,
+            DPI_AWARENESS_PER_MONITOR_AWARE = 2
+        }
+
+    [StructLayout(LayoutKind.Sequential)]
         public struct RECT
         {
             public int left;
@@ -165,5 +204,9 @@ namespace WpfScreenHelper
                          SM_CXSCREEN = 0,
                          SM_CYSCREEN = 1,
                          SPI_GETWORKAREA = 48;
+
+        public const int _S_OK = 0;
+        public const int _MONITOR_DEFAULTTONEAREST = 2;
+        public const int _E_INVALIDARG = -2147024809;
     }
 }
